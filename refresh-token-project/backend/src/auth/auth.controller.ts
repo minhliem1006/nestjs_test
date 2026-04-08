@@ -1,6 +1,11 @@
 import { Body, Controller, Get, Post, Request, Response, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
+import { UsernameGuard } from './guards/username.guard';
+import { RequireUsername } from './decorators/username.decorator';
+import { RegisterDto } from './dto/register.dto';
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -15,6 +20,11 @@ const getIp = (req: any): string =>
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
+
+  @Post('register')
+  async register(@Body() body: RegisterDto) {
+    return this.authService.register(body.username, body.password, body.name);
+  }
 
   @Post('login')
   async login(
@@ -66,7 +76,9 @@ export class AuthController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, UsernameGuard)
+  @Roles('admin')
+  @RequireUsername('liem')
   @Get('me')
   getProfile(@Request() req: any) {
     return req.user;

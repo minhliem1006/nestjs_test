@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import axios from 'axios';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import { getAccessToken, setAccessToken } from './api/tokenManager';
 import { SocketProvider } from './socket/SocketContext';
@@ -29,6 +30,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
         {/* AuthLayout wrap toàn bộ authenticated routes
             → SocketProvider mount 1 lần duy nhất

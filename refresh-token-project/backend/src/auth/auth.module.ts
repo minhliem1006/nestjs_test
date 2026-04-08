@@ -6,6 +6,8 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SessionGateway } from './session.gateway';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { RolesGuard } from './guards/roles.guard';
+import { UsernameGuard } from './guards/username.guard';
 
 @Module({
   imports: [
@@ -17,7 +19,9 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   providers: [
     AuthService,
     JwtStrategy,
-    SessionGateway, // WebSocket gateway xử lý real-time session
+    SessionGateway,
+    RolesGuard,
+    UsernameGuard,
   ],
 })
 export class AuthModule {}

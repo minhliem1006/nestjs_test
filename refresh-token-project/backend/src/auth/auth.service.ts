@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
@@ -20,6 +20,18 @@ export class AuthService {
   ) {
     this.ACCESS_SECRET  = this.configService.get<string>('JWT_ACCESS_SECRET');
     this.REFRESH_SECRET = this.configService.get<string>('JWT_REFRESH_SECRET');
+  }
+
+  // ─── ĐĂNG KÝ ────────────────────────────────────────────────────────────────
+  async register(username: string, password: string, name: string) {
+    const existing = this.usersService.findByUsername(username);
+    if (existing) {
+      throw new ConflictException('Username đã tồn tại');
+    }
+
+    const user = this.usersService.create(username, password, name);
+    this.logger.log(`[REGISTER] userId=${user.id} username=${username}`);
+    return { message: 'Đăng ký thành công', user: { id: user.id, name: user.name, role: user.role } };
   }
 
   // ─── ĐĂNG NHẬP ──────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
 
@@ -8,6 +9,13 @@ async function bootstrap() {
 
   // Đọc cookie từ request (cần để đọc refreshToken cookie)
   app.use(cookieParser());
+
+  // Tự động validate request body theo DTO
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,       // tự động bỏ các field không có trong DTO
+    forbidNonWhitelisted: true, // trả lỗi nếu gửi field lạ
+    transform: true,       // tự cast type (string → number...)
+  }));
 
   // credentials: true → cho phép browser gửi cookie cross-origin
   app.enableCors({

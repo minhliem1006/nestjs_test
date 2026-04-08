@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { setAccessToken } from '../api/tokenManager';
 
@@ -47,6 +47,9 @@ export default function Login() {
           {error && <p style={{ color: '#ff4d4f', fontSize: 13 }}>{error}</p>}
           <button style={s.btn} type="submit">Đăng nhập</button>
         </form>
+        <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: '#888' }}>
+          Chưa có tài khoản? <Link to="/register" style={{ color: '#1677ff' }}>Đăng ký</Link>
+        </p>
       </div>
     </div>
   );
