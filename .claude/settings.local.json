@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(mkdir -p \"c:/Users/LiemHo/Desktop/nodejs/refresh-token-project/backend/src/auth/guards\")",
+      "Bash(mkdir -p \"c:/Users/LiemHo/Desktop/nodejs/refresh-token-project/backend/src/auth/strategies\")",
+      "Bash(mkdir -p \"c:/Users/LiemHo/Desktop/nodejs/refresh-token-project/backend/src/users\")",
+      "Bash(mkdir -p \"c:/Users/LiemHo/Desktop/nodejs/refresh-token-project/frontend/src/api\")",
+      "Bash(mkdir -p \"c:/Users/LiemHo/Desktop/nodejs/refresh-token-project/frontend/src/pages\")",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(echo \"Backend PID: $!\")",
+      "Bash(echo \"Frontend PID: $!\")",
+      "Bash(pkill -f \"ts-node.*refresh-token\")",
+      "Bash(echo \"PID: $!\")",
+      "Bash(npx kill-port:*)"
+    ]
+  }
+}
