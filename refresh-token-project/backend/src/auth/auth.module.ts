@@ -8,12 +8,16 @@ import { SessionGateway } from './session.gateway';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RolesGuard } from './guards/roles.guard';
 import { UsernameGuard } from './guards/username.guard';
+import { TokenModule } from '../token/token.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
     UsersModule,
     PassportModule,
     JwtModule.register({}),
+    TokenModule,
+    AuditModule,
   ],
   controllers: [AuthController],
   providers: [

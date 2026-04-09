@@ -3,11 +3,14 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { SessionGateway } from './session.gateway';
+import { TokenService } from '../token/token.service';
+import { RevokedReason } from '../token/entities/refresh-token.entity';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction } from '../audit/entities/audit-log.entity';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private refreshTokenStore = new Map<string, number>(); // token → userId
 
   private readonly ACCESS_SECRET: string;
   private readonly REFRESH_SECRET: string;
@@ -17,13 +20,15 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private sessionGateway: SessionGateway,
+    private tokenService: TokenService,
+    private auditService: AuditService,
   ) {
     this.ACCESS_SECRET  = this.configService.get<string>('JWT_ACCESS_SECRET');
     this.REFRESH_SECRET = this.configService.get<string>('JWT_REFRESH_SECRET');
   }
 
   // ─── ĐĂNG KÝ ────────────────────────────────────────────────────────────────
-  async register(username: string, password: string, name: string) {
+  async register(username: string, password: string, name: string, ip: string) {
     const existing = this.usersService.findByUsername(username);
     if (existing) {
       throw new ConflictException('Username đã tồn tại');
@@ -31,6 +36,9 @@ export class AuthService {
 
     const user = this.usersService.create(username, password, name);
     this.logger.log(`[REGISTER] userId=${user.id} username=${username}`);
+
+    await this.auditService.log({ action: AuditAction.REGISTER, ip, userId: user.id, metadata: { username } });
+
     return { message: 'Đăng ký thành công', user: { id: user.id, name: user.name, role: user.role } };
   }
 
@@ -39,52 +47,54 @@ export class AuthService {
     const user = this.usersService.findByUsername(username);
     if (!user || user.password !== password) {
       this.logger.warn(`[LOGIN_FAILED] username=${username} ip=${ip}`);
+      await this.auditService.log({ action: AuditAction.LOGIN_FAILED, ip, metadata: { username } });
       throw new UnauthorizedException('Sai tên đăng nhập hoặc mật khẩu');
     }
 
     const tokens = this.generateTokens(user.id, user.username, user.role);
 
     // Thông báo các session đang online trước khi lưu token mới
-    this.sessionGateway.notifyNewLogin(user.id, {
-      ip,
-      time: new Date().toLocaleTimeString('vi-VN'),
-    });
+    this.sessionGateway.notifyNewLogin(user.id, { ip, time: new Date().toLocaleTimeString('vi-VN') });
 
-    this.refreshTokenStore.set(tokens.refreshToken, user.id);
+    // Lưu refresh token vào Redis + PostgreSQL
+    await this.tokenService.storeToken(tokens.refreshToken, user.id, ip);
+
+    await this.auditService.log({ action: AuditAction.LOGIN_SUCCESS, ip, userId: user.id });
     this.logger.log(`[LOGIN] userId=${user.id} username=${username} ip=${ip}`);
 
-    return {
-      ...tokens,
-      user: { id: user.id, name: user.name, role: user.role },
-    };
+    return { ...tokens, user: { id: user.id, name: user.name, role: user.role } };
   }
 
   // ─── LÀM MỚI TOKEN (REFRESH) ────────────────────────────────────────────────
   async refresh(refreshToken: string, ip: string) {
     try {
+      // Verify JWT signature trước
       const payload = this.jwtService.verify(refreshToken, { secret: this.REFRESH_SECRET });
-      const userId = this.refreshTokenStore.get(refreshToken);
 
+      // Check token có tồn tại và chưa bị revoke không (Redis → PG)
+      const userId = await this.tokenService.validateToken(refreshToken);
       if (!userId) {
-        this.logger.warn(`[REFRESH_UNKNOWN] userId=${payload.sub} ip=${ip} → có thể do server restart`);
+        this.logger.warn(`[REFRESH_UNKNOWN] userId=${payload.sub} ip=${ip}`);
+        await this.auditService.log({ action: AuditAction.REFRESH_FAILED, ip, userId: payload.sub, metadata: { reason: 'token_not_found' } });
         throw new UnauthorizedException('Refresh token không hợp lệ');
       }
 
       if (userId !== payload.sub) {
         this.logger.warn(`[REFRESH_REUSE] userId=${payload.sub} ip=${ip} → có thể bị tấn công`);
+        await this.auditService.log({ action: AuditAction.REFRESH_FAILED, ip, userId: payload.sub, metadata: { reason: 'reuse_detected' } });
         throw new UnauthorizedException('Refresh token không hợp lệ');
       }
 
       const user = this.usersService.findById(userId);
       if (!user) throw new UnauthorizedException('Người dùng không tồn tại');
 
-      this.refreshTokenStore.delete(refreshToken);
+      // Rotate: revoke token cũ → tạo token mới
+      await this.tokenService.revokeToken(refreshToken, RevokedReason.EXPIRED, ip, userId);
       const tokens = this.generateTokens(user.id, user.username, user.role);
-      this.refreshTokenStore.set(tokens.refreshToken, user.id);
-      this.sessionGateway.notifyTokenRefreshed(user.id, {
-        ip,
-        time: new Date().toLocaleTimeString('vi-VN'),
-      });
+      await this.tokenService.storeToken(tokens.refreshToken, user.id, ip);
+
+      this.sessionGateway.notifyTokenRefreshed(user.id, { ip, time: new Date().toLocaleTimeString('vi-VN') });
+      await this.auditService.log({ action: AuditAction.REFRESH_SUCCESS, ip, userId: user.id });
       this.logger.log(`[REFRESH] userId=${user.id} ip=${ip}`);
 
       return tokens;
@@ -96,23 +106,23 @@ export class AuthService {
   }
 
   // ─── ĐĂNG XUẤT ──────────────────────────────────────────────────────────────
-  logout(refreshToken: string, ip: string) {
-    const userId = this.refreshTokenStore.get(refreshToken);
-    this.refreshTokenStore.delete(refreshToken);
+  async logout(refreshToken: string, ip: string) {
+    // Lấy userId từ token để log (best effort)
+    const userId = await this.tokenService.validateToken(refreshToken);
+    await this.tokenService.revokeToken(refreshToken, RevokedReason.LOGOUT, ip, userId ?? undefined);
+    await this.auditService.log({ action: AuditAction.LOGOUT, ip, userId: userId ?? undefined });
     this.logger.log(`[LOGOUT] userId=${userId ?? 'unknown'} ip=${ip}`);
     return { message: 'Đăng xuất thành công' };
   }
 
   // ─── ĐỔI MẬT KHẨU ───────────────────────────────────────────────────────────
-  // revokeAll: true  → thu hồi tất cả session khác, push SESSION_REVOKED qua WS
-  // revokeAll: false → chỉ đổi password, giữ nguyên tất cả session
   async changePassword(
     userId: number,
     oldPassword: string,
     newPassword: string,
     revokeAll: boolean,
-    currentRefreshToken: string, // giữ lại session này
-    currentSocketId: string,     // giữ lại socket này
+    currentRefreshToken: string,
+    currentSocketId: string,
     ip: string,
   ) {
     const user = this.usersService.findById(userId);
@@ -125,22 +135,13 @@ export class AuthService {
     this.logger.log(`[CHANGE_PASSWORD] userId=${userId} revokeAll=${revokeAll} ip=${ip}`);
 
     if (revokeAll) {
-      // Xóa tất cả refreshToken của user trừ session hiện tại
-      this.revokeAllTokensExcept(userId, currentRefreshToken);
-      // Push SESSION_REVOKED đến các thiết bị khác qua WebSocket
+      await this.tokenService.revokeAllTokensForUser(userId, currentRefreshToken, RevokedReason.PASSWORD_CHANGE, ip);
       this.sessionGateway.revokeUserSessions(userId, currentSocketId);
     }
 
-    return { message: 'Đổi mật khẩu thành công' };
-  }
+    await this.auditService.log({ action: AuditAction.CHANGE_PASSWORD, ip, userId, metadata: { revokeAll } });
 
-  // ─── THU HỒI TẤT CẢ TOKEN TRỪ SESSION HIỆN TẠI ────────────────────────────
-  private revokeAllTokensExcept(userId: number, keepToken: string) {
-    for (const [token, id] of this.refreshTokenStore) {
-      if (id === userId && token !== keepToken) {
-        this.refreshTokenStore.delete(token);
-      }
-    }
+    return { message: 'Đổi mật khẩu thành công' };
   }
 
   // ─── TẠO CẶP TOKEN ──────────────────────────────────────────────────────────

@@ -20,6 +20,10 @@ export default function Login() {
         { username, password },
         { withCredentials: true },
       );
+
+      console.log("data:::",data);
+      
+
       setAccessToken(data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
       // Navigate → SocketProvider mount → tự connect + register handlers

@@ -4,6 +4,7 @@ import axios from 'axios';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import AuditLogs from './pages/AuditLogs';
 import { getAccessToken, setAccessToken } from './api/tokenManager';
 import { SocketProvider } from './socket/SocketContext';
 
@@ -37,6 +38,7 @@ function App() {
             → thêm page mới chỉ cần thêm Route bên trong, không cần bọc lại */}
         <Route element={<AuthLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/audit-logs" element={<AuditLogs />} />
           {/* Sau này thêm page mới vào đây:
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} /> */}

@@ -149,6 +149,15 @@ export default function Dashboard() {
           </form>
         )}
 
+        {user.role === 'admin' && (
+          <button
+            style={{ ...s.btn, background: '#fa8c16', marginTop: 8 }}
+            onClick={() => navigate('/audit-logs')}
+          >
+            Xem Audit Logs
+          </button>
+        )}
+
         <button style={{ ...s.btn, background: '#ff4d4f', marginTop: 8 }} onClick={handleLogout}>
           Đăng xuất
         </button>

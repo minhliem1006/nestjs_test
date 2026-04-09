@@ -14,13 +14,13 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // Chuẩn hóa tất cả response lỗi về một format thống nhất
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // app.useGlobalFilters(new HttpExceptionFilter());
 
   // Log thời gian xử lý mỗi request
   app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Wrap tất cả response thành công về { success: true, data: ... }
-  app.useGlobalInterceptors(new TransformInterceptor());
+  // app.useGlobalInterceptors(new TransformInterceptor());
 
   // Tự động validate request body theo DTO
   app.useGlobalPipes(new ValidationPipe({

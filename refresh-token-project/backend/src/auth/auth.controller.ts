@@ -22,8 +22,8 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
-  async register(@Body() body: RegisterDto) {
-    return this.authService.register(body.username, body.password, body.name);
+  async register(@Body() body: RegisterDto, @Request() req: any) {
+    return this.authService.register(body.username, body.password, body.name, getIp(req));
   }
 
   @Post('login')
@@ -48,11 +48,11 @@ export class AuthController {
   }
 
   @Post('logout')
-  logout(
+  async logout(
     @Request() req: any,
     @Response({ passthrough: true }) res: any,
   ) {
-    this.authService.logout(req.cookies['refreshToken'], getIp(req));
+    await this.authService.logout(req.cookies['refreshToken'], getIp(req));
     res.clearCookie('refreshToken');
     return { message: 'Đăng xuất thành công' };
   }
@@ -78,9 +78,10 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard, RolesGuard, UsernameGuard)
   @Roles('admin')
-  @RequireUsername('liem')
+  // @RequireUsername('liem')
   @Get('me')
   getProfile(@Request() req: any) {
     return req.user;
   }
+
 }
